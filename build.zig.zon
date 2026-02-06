@@ -1,0 +1,18 @@
+.{
+    .name = .harha,
+    .version = "0.1.0",
+    .fingerprint = 0x2c1e57a868d2a776,
+    .dependencies = .{
+        .sra_archive = .{
+            .lazy = true,
+            .url = "git+https://github.com/sorvi-platform/sra-archive.git#13818062c2e3bcb87c8b391911b27bb3eba0d5d3",
+            .hash = "sra_archive-0.1.0-edyyWmaSAAAKqZG7SFCDFTEugKtNdYmgNw90gTbx9Fl5",
+        },
+    },
+    .paths = .{
+        "LICENSE",
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
