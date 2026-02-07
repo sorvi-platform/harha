@@ -32,11 +32,12 @@ const Vfs = enum {
         switch (self) {
             .native => {},
             .sra => {
-                const dep = b.lazyDependency("sra_archive", .{
+                if (b.lazyDependency("sra_archive", .{
                     .target = module.resolved_target,
                     .optimize = module.optimize,
-                }) orelse @panic("failed to retieve sra_archive dependency");
-                module.addImport("sra", dep.module("sra"));
+                })) |dep| {
+                    module.addImport("sra", dep.module("sra"));
+                }
             },
         }
     }
