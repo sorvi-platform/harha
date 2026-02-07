@@ -224,10 +224,10 @@ fn deleteFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.Delet
     return fs.deleteFile(native_dir.inner, child);
 }
 
-fn seek(ptr: *anyopaque, file: harha.File, cursor: harha.File.Cursor) harha.SeekError!u64 {
+fn seek(ptr: *anyopaque, file: harha.File, offset: u64, whence: harha.File.Whence) harha.SeekError!u64 {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_file = self.file.getPtr(file) orelse return error.Unexpected;
-    return native_file.vfs.seek(native_file.inner, cursor);
+    return native_file.vfs.seek(native_file.inner, offset, whence);
 }
 
 fn writev(ptr: *anyopaque, file: harha.File, iov: []const []const u8) harha.WriteError!usize {

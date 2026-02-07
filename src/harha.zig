@@ -21,7 +21,7 @@ pub const VTable = struct {
     openFile: *const fn (*anyopaque, dir: Dir, sub_path: []const u8, options: File.OpenOptions) OpenFileError!File,
     closeFile: *const fn (*anyopaque, file: File) void,
     deleteFile: *const fn (*anyopaque, dir: Dir, sub_path: []const u8) DeleteFileError!void,
-    seek: *const fn (*anyopaque, file: File, cursor: File.Cursor) SeekError!u64,
+    seek: *const fn (*anyopaque, file: File, offset: u64, whence: File.Whence) SeekError!u64,
     writev: *const fn (*anyopaque, file: File, iov: []const []const u8) WriteError!usize,
     pwritev: *const fn (*anyopaque, file: File, iov: []const []const u8, offset: u64) WriteError!usize,
     readv: *const fn (*anyopaque, file: File, iov: []const []u8) ReadError!usize,
@@ -99,9 +99,9 @@ pub const Vfs = struct {
         return self.vtable.deleteFile(self.ptr, rdir, sub_path.relative());
     }
 
-    pub fn seek(self: @This(), file: File, cursor: File.Cursor) !u64 {
+    pub fn seek(self: @This(), file: File, offset: u64, whence: File.Whence) !u64 {
         if (!self.permissions.stat) return error.PermissionDenied;
-        return self.vtable.seek(self.ptr, file, cursor);
+        return self.vtable.seek(self.ptr, file, offset, whence);
     }
 
     pub fn writev(self: @This(), file: File, iov: []const []const u8) !usize {
@@ -174,11 +174,11 @@ pub const File = enum (u32) {
         create: bool = false,
     };
 
-    pub const Cursor = union (enum) {
-        set: u64,
-        forward: u64,
-        backward: u64,
-        from_end: u64,
+    pub const Whence = enum {
+        set,
+        forward,
+        backward,
+        from_end,
     };
 };
 
@@ -577,7 +577,7 @@ pub const noop = struct {
         return error.Unsupported;
     }
 
-    pub fn seek(_: *anyopaque, _: File, _: File.Cursor) SeekError!u64 {
+    pub fn seek(_: *anyopaque, _: File, _: u64, _: File.Whence) SeekError!u64 {
         return error.Unsupported;
     }
 

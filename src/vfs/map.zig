@@ -197,11 +197,11 @@ pub fn Map(E: type) type {
             try fs.deleteFile(id.innerDir(), .{ .resolved = sub_path });
         }
 
-        fn seek(ptr: *anyopaque, file: harha.File, cursor: harha.File.Cursor) harha.SeekError!u64 {
+        fn seek(ptr: *anyopaque, file: harha.File, offset: u64, whence: harha.File.Whence) harha.SeekError!u64 {
             const self: *const @This() = @ptrCast(@alignCast(ptr));
             const id: Id = .fromHarhaFile(file);
             const fs = self.mnt[id.mnt_idx] orelse return error.Unseekable;
-            return fs.seek(id.innerFile(), cursor);
+            return fs.seek(id.innerFile(), offset, whence);
         }
 
         fn writev(ptr: *anyopaque, file: harha.File, iov: []const []const u8) harha.WriteError!usize {

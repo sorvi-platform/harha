@@ -403,18 +403,18 @@ fn deleteFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.Delet
     };
 }
 
-fn seek(ptr: *anyopaque, file: harha.File, cursor: harha.File.Cursor) harha.SeekError!u64 {
+fn seek(ptr: *anyopaque, file: harha.File, offset: u64, whence: harha.File.Whence) harha.SeekError!u64 {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     var native_file = self.file.getPtr(file) orelse return error.Unexpected;
-    switch (cursor) {
-        .set => |offset| native_file.rw_offset = offset,
-        .forward => |delta| native_file.rw_offset +|= delta,
-        .backward => |delta| native_file.rw_offset -|= delta,
-        .from_end => |delta| native_file.rw_offset = (native_file.os.getEndPos() catch |err| return switch (err) {
+    switch (whence) {
+        .set => native_file.rw_offset = offset,
+        .forward => native_file.rw_offset +|= offset,
+        .backward => native_file.rw_offset -|= offset,
+        .from_end => native_file.rw_offset = (native_file.os.getEndPos() catch |err| return switch (err) {
             error.AccessDenied => error.PermissionDenied,
             error.SystemResources => error.Unexpected,
             else => |e| e,
-        }) -| delta,
+        }) -| offset,
     }
     return native_file.rw_offset;
 }

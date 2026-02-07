@@ -300,18 +300,18 @@ fn closeFile(ptr: *anyopaque, file: harha.File) void {
     _ = self.file.swapRemove(file);
 }
 
-fn seek(ptr: *anyopaque, file: harha.File, cursor: harha.File.Cursor) harha.SeekError!u64 {
+fn seek(ptr: *anyopaque, file: harha.File, offset: u64, whence: harha.File.Whence) harha.SeekError!u64 {
     const id: Id = .fromHarhaFile(file);
     if (id.kind != .file) return error.Unexpected;
     const self: *@This() = @ptrCast(@alignCast(ptr));
     var native_file = self.file.getPtr(file) orelse return error.Unexpected;
-    switch (cursor) {
-        .set => |offset| native_file.rw_offset = offset,
-        .forward => |delta| native_file.rw_offset +|= delta,
-        .backward => |delta| native_file.rw_offset -|= delta,
-        .from_end => |delta| {
+    switch (whence) {
+        .set => native_file.rw_offset = offset,
+        .forward => native_file.rw_offset +|= offset,
+        .backward => native_file.rw_offset -|= offset,
+        .from_end => {
             const entry = id.entry(&self.path);
-            native_file.rw_offset = entry.stat.size -| delta;
+            native_file.rw_offset = entry.stat.size -| offset;
         },
     }
     return native_file.rw_offset;

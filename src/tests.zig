@@ -155,16 +155,16 @@ test "Std: seek operations" {
     const file = try vfs.openFile(.root, try .resolve("test.txt"), .{});
     defer vfs.closeFile(file);
 
-    _ = try vfs.seek(file, .{ .set = 5 });
+    _ = try vfs.seek(file, 5, .set);
     var buffer: [5]u8 = undefined;
     const bytes_read = try vfs.readv(file, &.{&buffer});
     try testing.expectEqualStrings("56789", buffer[0..bytes_read]);
 
-    _ = try vfs.seek(file, .{ .backward = 3 });
+    _ = try vfs.seek(file, 3, .backward);
     const bytes_read2 = try vfs.readv(file, &.{&buffer});
     try testing.expectEqualStrings("789", buffer[0..bytes_read2]);
 
-    _ = try vfs.seek(file, .{ .from_end = 2 });
+    _ = try vfs.seek(file, 2, .from_end);
     const bytes_read3 = try vfs.readv(file, &.{&buffer});
     try testing.expectEqualStrings("89", buffer[0..bytes_read3]);
 }
@@ -221,7 +221,7 @@ test "Std: pread/pwrite operations" {
     const bytes_read = try vfs.preadv(file, &.{&buffer}, 6);
     try testing.expectEqualStrings("World", buffer[0..bytes_read]);
 
-    const pos = try vfs.seek(file, .{ .set = 0 });
+    const pos = try vfs.seek(file, 0, .set);
     try testing.expectEqual(@as(u64, 0), pos);
 }
 
@@ -515,7 +515,7 @@ test "Edge: multiple opens of same file" {
     const file2 = try vfs.openFile(.root, try .resolve("test.txt"), .{});
     defer vfs.closeFile(file2);
 
-    _ = try vfs.seek(file1, .{ .set = 5 });
+    _ = try vfs.seek(file1, 5, .set);
 
     var buffer1: [5]u8 = undefined;
     var buffer2: [5]u8 = undefined;
@@ -757,7 +757,7 @@ test "SRA: seek operations" {
     defer vfs.closeFile(file);
 
     // Seek forward
-    const pos = try vfs.seek(file, .{ .set = 5 });
+    const pos = try vfs.seek(file, 5, .set);
     try testing.expectEqual(@as(u64, 5), pos);
 
     // Read from new position
@@ -786,7 +786,7 @@ test "SRA: multiple file handles" {
     defer vfs.closeFile(file2);
 
     // Seek one handle
-    _ = try vfs.seek(file1, .{ .set = 5 });
+    _ = try vfs.seek(file1, 5, .set);
 
     // Other handle should still be at position 0
     var buffer1: [5]u8 = undefined;
@@ -1228,7 +1228,7 @@ test "Boundary: zero-byte operations" {
     try testing.expectEqual(@as(usize, 0), written);
 
     // Seek to 0
-    _ = try vfs.seek(file, .{ .set = 0 });
+    _ = try vfs.seek(file, 0, .set);
 
     // Read zero bytes
     var buffer: [10]u8 = undefined;
@@ -1743,10 +1743,10 @@ fn testHandleIsolation(vfs: harha.Vfs, path: []const u8, allocator: std.mem.Allo
     defer vfs.closeFile(file2);
 
     // Seek one handle
-    _ = try vfs.seek(file1, .{ .set = 10 });
+    _ = try vfs.seek(file1, 10, .set);
 
     // Other handle should be at 0
-    const pos2 = try vfs.seek(file2, .{ .set = 0 });
+    const pos2 = try vfs.seek(file2, 0, .set);
     if (pos2 != 0) return error.HandleNotIsolated;
 
     // Read from both - should get different data if file is long enough
@@ -2114,7 +2114,7 @@ test "Map: seek operations" {
     defer vfs.closeFile(file);
 
     // Seek and read
-    _ = try vfs.seek(file, .{ .set = 5 });
+    _ = try vfs.seek(file, 5, .set);
     var buffer: [5]u8 = undefined;
     const bytes_read = try vfs.readv(file, &.{&buffer});
     try testing.expectEqualStrings("56789", buffer[0..bytes_read]);
