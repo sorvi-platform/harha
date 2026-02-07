@@ -147,32 +147,35 @@ pub fn Map(E: type) type {
             const self: *const @This() = @ptrCast(@alignCast(ptr));
             const id: Id = .fromHarhaDir(dir);
             const fs = self.mnt[id.mnt_idx] orelse return error.NotOpenForIteration;
-            if (!fs.permissions.iterate) return error.PermissionDenied;
-            return fs.vtable.iterate(fs.ptr, id.innerDir());
+            const iter = try fs.iterate(id.innerDir());
+            return iter.ptr;
         }
 
         fn iterateNext(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) harha.IterateError!?harha.Dir.Entry {
             const self: *const @This() = @ptrCast(@alignCast(ptr));
             const id: Id = .fromHarhaDir(dir);
             const fs = self.mnt[id.mnt_idx] orelse unreachable; // vfs went somewhere during iteration
+            const rdir: harha.Dir = if (fs.root != .root and id.innerDir() == .root) fs.root else id.innerDir();
             std.debug.assert(fs.permissions.iterate);
-            return fs.vtable.iterateNext(fs.ptr, id.innerDir(), state);
+            return fs.vtable.iterateNext(fs.ptr, rdir, state);
         }
 
         fn iterateReset(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) void {
             const self: *const @This() = @ptrCast(@alignCast(ptr));
             const id: Id = .fromHarhaDir(dir);
             const fs = self.mnt[id.mnt_idx] orelse unreachable; // vfs went somewhere during iteration
+            const rdir: harha.Dir = if (fs.root != .root and id.innerDir() == .root) fs.root else id.innerDir();
             std.debug.assert(fs.permissions.iterate);
-            return fs.vtable.iterateReset(fs.ptr, id.innerDir(), state);
+            return fs.vtable.iterateReset(fs.ptr, rdir, state);
         }
 
         fn iterateDeinit(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) void {
             const self: *const @This() = @ptrCast(@alignCast(ptr));
             const id: Id = .fromHarhaDir(dir);
             const fs = self.mnt[id.mnt_idx] orelse unreachable; // vfs went somewhere during iteration
+            const rdir: harha.Dir = if (fs.root != .root and id.innerDir() == .root) fs.root else id.innerDir();
             std.debug.assert(fs.permissions.iterate);
-            return fs.vtable.iterateDeinit(fs.ptr, id.innerDir(), state);
+            return fs.vtable.iterateDeinit(fs.ptr, rdir, state);
         }
 
         fn openFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha.File.OpenOptions) harha.OpenFileError!harha.File {

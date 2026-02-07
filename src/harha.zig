@@ -32,10 +32,25 @@ pub const Vfs = struct {
     ptr: *anyopaque,
     vtable: *const VTable,
     permissions: Permissions,
+    root: Dir = .root,
+
+    /// Change the root directory for this interface.
+    /// This is completely transparent to the filesystem implementation.
+    /// Using this function in combination of throwaway interface instances may leak directory descriptors!
+    /// Filesystem implementations do clean up after themselves on deinit however.
+    pub fn chroot(self: *@This(), dir: Dir, sub_path: SafePath) !void {
+        const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
+        if (self.root != .root) self.closeDir(self.root);
+        if (sub_path.relative().len > 0) {
+            self.root = try self.vtable.openDir(self.ptr, rdir, sub_path.relative(), .{.iterate = true});
+        } else {
+            self.root = .root;
+        }
+    }
 
     pub fn openDir(self: @This(), dir: Dir, sub_path: SafePath, options: Dir.OpenOptions) !Dir {
         if (!self.permissions.create and options.create) return error.PermissionDenied;
-        const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
+        const rdir: Dir = if (dir == .root or sub_path.isAbsolute()) self.root else dir;
         return self.vtable.openDir(self.ptr, rdir, sub_path.relative(), options);
     }
 
@@ -45,29 +60,31 @@ pub const Vfs = struct {
 
     pub fn deleteDir(self: @This(), dir: Dir, sub_path: SafePath, options: Dir.DeleteOptions) !void {
         if (!self.permissions.delete) return error.PermissionDenied;
-        const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
+        const rdir: Dir = if (dir == .root or sub_path.isAbsolute()) self.root else dir;
         return self.vtable.deleteDir(self.ptr, rdir, sub_path.relative(), options);
     }
 
     pub fn stat(self: @This(), dir: Dir, sub_path: SafePath) !Stat {
         if (!self.permissions.stat) return error.PermissionDenied;
-        const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
+        const rdir: Dir = if (dir == .root or sub_path.isAbsolute()) self.root else dir;
         return self.vtable.stat(self.ptr, rdir, sub_path.relative());
     }
 
     pub fn iterate(self: @This(), dir: Dir) !Iterator {
         if (!self.permissions.iterate) return error.PermissionDenied;
+        const rdir: Dir = if (dir == .root) self.root else dir;
         return .{
             .vfs = self,
-            .dir = dir,
-            .ptr = try self.vtable.iterate(self.ptr, dir),
+            .dir = rdir,
+            .ptr = try self.vtable.iterate(self.ptr, rdir),
         };
     }
 
     pub fn walkSelectively(self: @This(), dir: Dir, allocator: std.mem.Allocator) !SelectiveWalker {
+        const rdir: Dir = if (dir == .root) self.root else dir;
         var stack: std.ArrayList(SelectiveWalker.StackItem) = .empty;
         try stack.append(allocator, .{
-            .iter = try self.iterate(dir),
+            .iter = try self.iterate(rdir),
             .dirname_len = 0,
         });
         return .{
@@ -78,14 +95,15 @@ pub const Vfs = struct {
     }
 
     pub fn walk(self: @This(), dir: Dir, allocator: std.mem.Allocator) !Walker {
-        return .{ .inner = try self.walkSelectively(dir, allocator) };
+        const rdir: Dir = if (dir == .root) self.root else dir;
+        return .{ .inner = try self.walkSelectively(rdir, allocator) };
     }
 
     pub fn openFile(self: @This(), dir: Dir, sub_path: SafePath, options: File.OpenOptions) !File {
         if (!self.permissions.create and options.create) return error.PermissionDenied;
         if (!self.permissions.read and (options.mode == .read_only or options.mode == .read_write)) return error.PermissionDenied;
         if (!self.permissions.write and (options.mode == .write_only or options.mode == .read_write)) return error.PermissionDenied;
-        const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
+        const rdir: Dir = if (dir == .root or sub_path.isAbsolute()) self.root else dir;
         return self.vtable.openFile(self.ptr, rdir, sub_path.relative(), options);
     }
 
@@ -95,7 +113,7 @@ pub const Vfs = struct {
 
     pub fn deleteFile(self: @This(), dir: Dir, sub_path: SafePath) !void {
         if (!self.permissions.delete) return error.PermissionDenied;
-        const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
+        const rdir: Dir = if (dir == .root or sub_path.isAbsolute()) self.root else dir;
         return self.vtable.deleteFile(self.ptr, rdir, sub_path.relative());
     }
 

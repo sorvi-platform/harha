@@ -169,30 +169,32 @@ fn iterate(ptr: *anyopaque, dir: harha.Dir) harha.IterateError!*anyopaque {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     // TODO: Allow iterating mount points under .root
     const native_dir = self.dir.getPtr(dir) orelse return error.NotOpenForIteration;
-    // check permissions due to calling vtable function directly
-    if (!native_dir.vfs.permissions.iterate) return error.PermissionDenied;
-    return native_dir.vfs.vtable.iterate(native_dir.vfs.ptr, native_dir.inner);
+    const iter = try native_dir.vfs.iterate(native_dir.inner);
+    return iter.ptr;
 }
 
 fn iterateNext(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) harha.IterateError!?harha.Dir.Entry {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.dir.getPtr(dir) orelse return error.NotOpenForIteration;
+    const rdir: harha.Dir = if (native_dir.vfs.root != .root and native_dir.inner == .root) native_dir.vfs.root else native_dir.inner;
     std.debug.assert(native_dir.vfs.permissions.iterate);
-    return native_dir.vfs.vtable.iterateNext(native_dir.vfs.ptr, native_dir.inner, state);
+    return native_dir.vfs.vtable.iterateNext(native_dir.vfs.ptr, rdir, state);
 }
 
 fn iterateReset(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) void {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.dir.getPtr(dir) orelse unreachable; // the directory the iterator is tied to is gone
+    const rdir: harha.Dir = if (native_dir.vfs.root != .root and native_dir.inner == .root) native_dir.vfs.root else native_dir.inner;
     std.debug.assert(native_dir.vfs.permissions.iterate);
-    native_dir.vfs.vtable.iterateReset(native_dir.vfs.ptr, native_dir.inner, state);
+    native_dir.vfs.vtable.iterateReset(native_dir.vfs.ptr, rdir, state);
 }
 
 fn iterateDeinit(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) void {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.dir.getPtr(dir) orelse unreachable; // the directory the iterator is tied to is gone
+    const rdir: harha.Dir = if (native_dir.vfs.root != .root and native_dir.inner == .root) native_dir.vfs.root else native_dir.inner;
     std.debug.assert(native_dir.vfs.permissions.iterate);
-    native_dir.vfs.vtable.iterateDeinit(native_dir.vfs.ptr, native_dir.inner, state);
+    native_dir.vfs.vtable.iterateDeinit(native_dir.vfs.ptr, rdir, state);
 }
 
 fn openFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha.File.OpenOptions) harha.OpenFileError!harha.File {
