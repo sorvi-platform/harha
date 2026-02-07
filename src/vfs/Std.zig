@@ -226,13 +226,18 @@ fn stat(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.StatError!h
     const os_dir = toOsDir(self, dir) orelse return error.NotDir;
     const actual_sub_path = if (sub_path.len > 0) sub_path else ".";
     const st = os_dir.statFile(actual_sub_path) catch |err| return switch (err) {
+        error.IsDir => {
+            var st_dir = os_dir.openDir(actual_sub_path, .{.no_follow = true}) catch return error.Unexpected;
+            defer st_dir.close();
+            const st = st_dir.stat() catch return error.Unexpected;
+            return toHarhaStat(st);
+        },
         error.AccessDenied => error.PermissionDenied,
         error.SystemResources,
         error.ProcessFdQuotaExceeded,
         error.SystemFdQuotaExceeded,
         error.FileTooBig,
         error.NoSpaceLeft,
-        error.IsDir,
         error.WouldBlock,
         error.ProcessNotFound,
         error.SharingViolation,
