@@ -196,6 +196,7 @@ fn lookupPathIndex(self: *@This(), parent_path: []const u8, sub_path: []const u8
 
 fn lookupPathEntry(self: *@This(), parent_path: []const u8, sub_path: []const u8) !?*Entry {
     if (parent_path.len == 0) return self.path.getPtr(sub_path);
+    if (sub_path.len == 0) return self.path.getPtr(parent_path);
     const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{parent_path, sub_path});
     defer self.allocator.free(path);
     return self.path.getPtr(path);
