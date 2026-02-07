@@ -43,6 +43,10 @@ pub fn init(allocator: std.mem.Allocator) @This() {
 
 pub fn mount(self: *@This(), fs: harha.Vfs, mnt_point: []const u8) !void {
     if (mnt_point.len == 0 or mnt_point[0] != '/') return error.RelativePath;
+    for (self.mnt.values()) |other_fs| {
+        // The overlay can't distinquish between 2 instances of same vfs so disallow the usage
+        if (other_fs.ptr == fs.ptr) return error.VfsAlreadyMountedToOverlay;
+    }
     const dupe = try self.allocator.dupe(u8, mnt_point);
     errdefer self.allocator.free(dupe);
     const res = try self.mnt.getOrPut(self.allocator, dupe);
@@ -52,6 +56,20 @@ pub fn mount(self: *@This(), fs: harha.Vfs, mnt_point: []const u8) !void {
 
 pub fn unmount(self: *@This(), mnt_point: []const u8) void {
     const mnt = self.mnt.fetchOrderedRemove(mnt_point) orelse return;
+    for (0..self.file.count()) |i| {
+        const idx = self.file.count() - i - 1;
+        var file = self.file.values()[idx];
+        if (file.vfs.ptr != mnt.value.ptr) continue;
+        file.close();
+        self.file.swapRemoveAt(idx);
+    }
+    for (0..self.dir.count()) |i| {
+        const idx = self.dir.count() - i - 1;
+        var dir = self.dir.values()[idx];
+        if (dir.vfs.ptr != mnt.value.ptr) continue;
+        dir.close(self.allocator);
+        self.dir.swapRemoveAt(idx);
+    }
     self.allocator.free(mnt.key);
 }
 
