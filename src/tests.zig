@@ -1755,3 +1755,775 @@ fn testHandleIsolation(vfs: harha.Vfs, path: []const u8, allocator: std.mem.Allo
     _ = try vfs.readv(file1, &.{&buf1});
     _ = try vfs.readv(file2, &.{&buf2});
 }
+
+// ============================================================================
+// Map VFS Tests
+// ============================================================================
+
+// Test enum with small number of entries (uses fewer bits)
+const SmallMount = enum(u8) {
+    data,
+    cache,
+    temp,
+};
+
+// Test enum with more entries
+const MediumMount = enum(u8) {
+    data,
+    cache,
+    temp,
+    logs,
+    config,
+    runtime,
+    backup,
+};
+
+// Test enum at limit (more entries = fewer bits for inner handles)
+const LargeMount = enum(u8) {
+    m0, m1, m2, m3, m4, m5, m6, m7,
+    m8, m9, m10, m11, m12, m13, m14, m15,
+};
+
+test "Map: type generation and initialization" {
+    const MapVfs = harha.Map(SmallMount);
+
+    // Should initialize with all null
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // All slots should be null initially
+    try testing.expect(map.mnt[@intFromEnum(SmallMount.data)] == null);
+    try testing.expect(map.mnt[@intFromEnum(SmallMount.cache)] == null);
+    try testing.expect(map.mnt[@intFromEnum(SmallMount.temp)] == null);
+}
+
+test "Map: basic mount and unmount" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount
+    map.mount(.data, std_vfs.vfs(.all));
+    try testing.expect(map.mnt[@intFromEnum(SmallMount.data)] != null);
+
+    // Unmount
+    map.unmount(.data);
+    try testing.expect(map.mnt[@intFromEnum(SmallMount.data)] == null);
+}
+
+test "Map: basic file operations through mapped VFS" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    // Create test file in underlying filesystem
+    try tmp.dir.writeFile(.{
+        .sub_path = "test.txt",
+        .data = "Hello from Map VFS!",
+    });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Open and read file through Map VFS
+    const file = try vfs.openFile(data_root, try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file);
+
+    var buffer: [256]u8 = undefined;
+    const bytes_read = try vfs.readv(file, &.{&buffer});
+    try testing.expectEqualStrings("Hello from Map VFS!", buffer[0..bytes_read]);
+}
+
+test "Map: multiple mounted filesystems" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp_data = std.testing.tmpDir(.{});
+    defer tmp_data.cleanup();
+    var tmp_cache = std.testing.tmpDir(.{});
+    defer tmp_cache.cleanup();
+    var tmp_temp = std.testing.tmpDir(.{});
+    defer tmp_temp.cleanup();
+
+    // Create different content in each
+    try tmp_data.dir.writeFile(.{ .sub_path = "data.txt", .data = "data content" });
+    try tmp_cache.dir.writeFile(.{ .sub_path = "cache.txt", .data = "cache content" });
+    try tmp_temp.dir.writeFile(.{ .sub_path = "temp.txt", .data = "temp content" });
+
+    var std_vfs_data: harha.Std = try .init(allocator, tmp_data.dir);
+    defer std_vfs_data.deinit();
+    var std_vfs_cache: harha.Std = try .init(allocator, tmp_cache.dir);
+    defer std_vfs_cache.deinit();
+    var std_vfs_temp: harha.Std = try .init(allocator, tmp_temp.dir);
+    defer std_vfs_temp.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount all three
+    map.mount(.data, std_vfs_data.vfs(.all));
+    map.mount(.cache, std_vfs_cache.vfs(.all));
+    map.mount(.temp, std_vfs_temp.vfs(.all));
+
+    const vfs = map.vfs(.all);
+
+    // Access files from each mounted VFS
+    var buffer: [256]u8 = undefined;
+
+    const file_data = try vfs.openFile(map.rootDir(.data), try harha.SafePath.resolve("data.txt"), .{});
+    defer vfs.closeFile(file_data);
+    const read1 = try vfs.readv(file_data, &.{&buffer});
+    try testing.expectEqualStrings("data content", buffer[0..read1]);
+
+    const file_cache = try vfs.openFile(map.rootDir(.cache), try harha.SafePath.resolve("cache.txt"), .{});
+    defer vfs.closeFile(file_cache);
+    const read2 = try vfs.readv(file_cache, &.{&buffer});
+    try testing.expectEqualStrings("cache content", buffer[0..read2]);
+
+    const file_temp = try vfs.openFile(map.rootDir(.temp), try harha.SafePath.resolve("temp.txt"), .{});
+    defer vfs.closeFile(file_temp);
+    const read3 = try vfs.readv(file_temp, &.{&buffer});
+    try testing.expectEqualStrings("temp content", buffer[0..read3]);
+}
+
+test "Map: directory operations" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.makeDir("subdir");
+    try tmp.dir.writeFile(.{ .sub_path = "subdir/nested.txt", .data = "nested" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Open subdirectory
+    const subdir = try vfs.openDir(data_root, try harha.SafePath.resolve("subdir"), .{});
+    defer vfs.closeDir(subdir);
+
+    // Open file in subdirectory
+    const file = try vfs.openFile(subdir, try harha.SafePath.resolve("nested.txt"), .{});
+    defer vfs.closeFile(file);
+
+    var buffer: [256]u8 = undefined;
+    const bytes_read = try vfs.readv(file, &.{&buffer});
+    try testing.expectEqualStrings("nested", buffer[0..bytes_read]);
+}
+
+test "Map: stat operations" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "file.txt", .data = "content" });
+    try tmp.dir.makeDir("dir");
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Stat file
+    const file_stat = try vfs.stat(data_root, try harha.SafePath.resolve("file.txt"));
+    try testing.expectEqual(harha.Kind.file, file_stat.kind);
+    try testing.expect(file_stat.size > 0);
+
+    // Stat directory
+    const dir_stat = try vfs.stat(data_root, try harha.SafePath.resolve("dir"));
+    try testing.expectEqual(harha.Kind.dir, dir_stat.kind);
+}
+
+test "Map: iteration" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "file1.txt", .data = "1" });
+    try tmp.dir.writeFile(.{ .sub_path = "file2.txt", .data = "2" });
+    try tmp.dir.makeDir("subdir");
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+
+    // Open root with iterate permission
+    const dir = try vfs.openDir(map.rootDir(.data), try harha.SafePath.resolve(""), .{ .iterate = true });
+    defer vfs.closeDir(dir);
+
+    var iter = try vfs.iterate(dir);
+    defer iter.deinit();
+
+    var file_count: u32 = 0;
+    var dir_count: u32 = 0;
+
+    while (try iter.next()) |entry| {
+        if (entry.stat.kind == .file) file_count += 1;
+        if (entry.stat.kind == .dir) dir_count += 1;
+    }
+
+    try testing.expectEqual(@as(u32, 2), file_count);
+    try testing.expectEqual(@as(u32, 1), dir_count);
+}
+
+test "Map: iterator reset" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "a.txt", .data = "a" });
+    try tmp.dir.writeFile(.{ .sub_path = "b.txt", .data = "b" });
+    try tmp.dir.writeFile(.{ .sub_path = "c.txt", .data = "c" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const dir = try vfs.openDir(map.rootDir(.data), try harha.SafePath.resolve(""), .{ .iterate = true });
+    defer vfs.closeDir(dir);
+
+    var iter = try vfs.iterate(dir);
+    defer iter.deinit();
+
+    // First iteration
+    var first_count: u32 = 0;
+    while (try iter.next()) |_| {
+        first_count += 1;
+    }
+
+    // Reset
+    iter.reset();
+
+    // Second iteration
+    var second_count: u32 = 0;
+    while (try iter.next()) |_| {
+        second_count += 1;
+    }
+
+    try testing.expectEqual(first_count, second_count);
+    try testing.expectEqual(@as(u32, 3), first_count);
+}
+
+test "Map: write operations" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Create and write to file
+    const file = try vfs.openFile(data_root, try harha.SafePath.resolve("output.txt"), .{
+        .create = true,
+        .mode = .write_only,
+    });
+    defer vfs.closeFile(file);
+
+    const data = "Written through Map VFS";
+    const written = try vfs.writev(file, &.{data});
+    try testing.expectEqual(data.len, written);
+
+    // Verify by reading
+    const read_file = try vfs.openFile(data_root, try harha.SafePath.resolve("output.txt"), .{});
+    defer vfs.closeFile(read_file);
+
+    var buffer: [256]u8 = undefined;
+    const bytes_read = try vfs.readv(read_file, &.{&buffer});
+    try testing.expectEqualStrings(data, buffer[0..bytes_read]);
+}
+
+test "Map: seek operations" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "test.txt", .data = "0123456789" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const file = try vfs.openFile(map.rootDir(.data), try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file);
+
+    // Seek and read
+    _ = try vfs.seek(file, .{ .set = 5 });
+    var buffer: [5]u8 = undefined;
+    const bytes_read = try vfs.readv(file, &.{&buffer});
+    try testing.expectEqualStrings("56789", buffer[0..bytes_read]);
+}
+
+test "Map: pread/pwrite operations" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const file = try vfs.openFile(map.rootDir(.data), try harha.SafePath.resolve("test.txt"), .{
+        .create = true,
+        .mode = .read_write,
+    });
+    defer vfs.closeFile(file);
+
+    // Write at specific offset
+    _ = try vfs.pwritev(file, &.{"Hello World"}, 0);
+
+    // Read at specific offset
+    var buffer: [5]u8 = undefined;
+    const bytes_read = try vfs.preadv(file, &.{&buffer}, 6);
+    try testing.expectEqualStrings("World", buffer[0..bytes_read]);
+}
+
+test "Map: delete operations" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "delete_me.txt", .data = "x" });
+    try tmp.dir.makeDir("delete_dir");
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Delete file
+    try vfs.deleteFile(data_root, try harha.SafePath.resolve("delete_me.txt"));
+    try testing.expectError(error.FileNotFound, vfs.stat(data_root, try harha.SafePath.resolve("delete_me.txt")));
+
+    // Delete directory
+    try vfs.deleteDir(data_root, try harha.SafePath.resolve("delete_dir"), .{});
+    try testing.expectError(error.FileNotFound, vfs.stat(data_root, try harha.SafePath.resolve("delete_dir")));
+}
+
+test "Map: access unmounted VFS returns error" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount only .data, leave .cache unmounted
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+
+    // Try to access unmounted cache
+    const cache_root = map.rootDir(.cache);
+    try testing.expectError(error.NotDir, vfs.stat(cache_root, try harha.SafePath.resolve("")));
+}
+
+test "Map: remounting replaces VFS" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp1 = std.testing.tmpDir(.{});
+    defer tmp1.cleanup();
+    var tmp2 = std.testing.tmpDir(.{});
+    defer tmp2.cleanup();
+
+    try tmp1.dir.writeFile(.{ .sub_path = "test.txt", .data = "first" });
+    try tmp2.dir.writeFile(.{ .sub_path = "test.txt", .data = "second" });
+
+    var std_vfs1: harha.Std = try .init(allocator, tmp1.dir);
+    defer std_vfs1.deinit();
+    var std_vfs2: harha.Std = try .init(allocator, tmp2.dir);
+    defer std_vfs2.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount first VFS
+    map.mount(.data, std_vfs1.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Read from first VFS
+    const file1 = try vfs.openFile(data_root, try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file1);
+    var buffer: [256]u8 = undefined;
+    const read1 = try vfs.readv(file1, &.{&buffer});
+    try testing.expectEqualStrings("first", buffer[0..read1]);
+
+    // Remount with second VFS
+    map.mount(.data, std_vfs2.vfs(.all));
+
+    // Read from second VFS (same mount point)
+    const file2 = try vfs.openFile(data_root, try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file2);
+    const read2 = try vfs.readv(file2, &.{&buffer});
+    try testing.expectEqualStrings("second", buffer[0..read2]);
+}
+
+test "Map: handle bitpacking with medium enum" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(MediumMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "test.txt", .data = "content" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount to different enum values
+    map.mount(.data, std_vfs.vfs(.all));
+    map.mount(.logs, std_vfs.vfs(.all));
+    map.mount(.config, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+
+    // Open files from different mounts
+    const file_data = try vfs.openFile(map.rootDir(.data), try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file_data);
+
+    const file_logs = try vfs.openFile(map.rootDir(.logs), try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file_logs);
+
+    const file_config = try vfs.openFile(map.rootDir(.config), try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file_config);
+
+    // All handles should be different (different vfs_idx in bitpacked handle)
+    try testing.expect(@intFromEnum(file_data) != @intFromEnum(file_logs));
+    try testing.expect(@intFromEnum(file_logs) != @intFromEnum(file_config));
+    try testing.expect(@intFromEnum(file_data) != @intFromEnum(file_config));
+}
+
+test "Map: permissions passthrough" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "test.txt", .data = "data" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount with read-only permissions
+    map.mount(.data, std_vfs.vfs(.read_only));
+
+    const vfs = map.vfs(.all);
+    const data_root = map.rootDir(.data);
+
+    // Should be able to read
+    const file = try vfs.openFile(data_root, try harha.SafePath.resolve("test.txt"), .{});
+    defer vfs.closeFile(file);
+
+    // Should not be able to write (permission from underlying VFS)
+    try testing.expectError(error.PermissionDenied, vfs.openFile(data_root, try harha.SafePath.resolve("new.txt"), .{
+        .create = true,
+        .mode = .write_only,
+    }));
+}
+
+test "Map: walker integration" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.makeDir("a");
+    try tmp.dir.makeDir("a/b");
+    try tmp.dir.writeFile(.{ .sub_path = "file1.txt", .data = "1" });
+    try tmp.dir.writeFile(.{ .sub_path = "a/file2.txt", .data = "2" });
+    try tmp.dir.writeFile(.{ .sub_path = "a/b/file3.txt", .data = "3" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+
+    const vfs = map.vfs(.all);
+    const dir = try vfs.openDir(map.rootDir(.data), try harha.SafePath.resolve(""), .{ .iterate = true });
+    defer vfs.closeDir(dir);
+
+    var walker = try vfs.walk(dir, allocator);
+    defer walker.deinit();
+
+    var file_count: u32 = 0;
+    var dir_count: u32 = 0;
+
+    while (try walker.next()) |entry| {
+        if (entry.stat.kind == .file) file_count += 1;
+        if (entry.stat.kind == .dir) dir_count += 1;
+    }
+
+    try testing.expectEqual(@as(u32, 3), file_count);
+    try testing.expectEqual(@as(u32, 2), dir_count);
+}
+
+test "Map: zero allocation guarantee" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    // Map VFS itself requires no allocation
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // The vfs() method should not allocate
+    const vfs = map.vfs(.all);
+    _ = vfs;
+
+    // rootDir should not allocate
+    const data_root = map.rootDir(.data);
+    _ = data_root;
+
+    // mount/unmount should not allocate (just array assignment)
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    map.mount(.data, std_vfs.vfs(.all));
+    map.unmount(.data);
+}
+
+test "Map: large enum stress test" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(LargeMount);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(.{ .sub_path = "test.txt", .data = "data" });
+
+    var std_vfs: harha.Std = try .init(allocator, tmp.dir);
+    defer std_vfs.deinit();
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount to all 16 slots
+    inline for (comptime std.enums.values(LargeMount)) |mount_point| {
+        map.mount(mount_point, std_vfs.vfs(.all));
+    }
+
+    const vfs = map.vfs(.all);
+
+    // Access files from different mounts
+    inline for (comptime std.enums.values(LargeMount)) |mount_point| {
+        const file = try vfs.openFile(map.rootDir(mount_point), try harha.SafePath.resolve("test.txt"), .{});
+        defer vfs.closeFile(file);
+
+        var buffer: [256]u8 = undefined;
+        const bytes_read = try vfs.readv(file, &.{&buffer});
+        try testing.expectEqualStrings("data", buffer[0..bytes_read]);
+    }
+}
+
+test "Map: mixed VFS types" {
+    const allocator = testing.allocator;
+    const MapVfs = harha.Map(SmallMount);
+
+    var tmp1 = std.testing.tmpDir(.{});
+    defer tmp1.cleanup();
+    var tmp2 = std.testing.tmpDir(.{});
+    defer tmp2.cleanup();
+    var tmp3 = std.testing.tmpDir(.{});
+    defer tmp3.cleanup();
+
+    try tmp1.dir.writeFile(.{ .sub_path = "data.txt", .data = "data" });
+    try tmp2.dir.writeFile(.{ .sub_path = "cache.txt", .data = "cache" });
+    try tmp3.dir.writeFile(.{ .sub_path = "temp.txt", .data = "temp" });
+
+    // Create Std VFS instances
+    var std_vfs1: harha.Std = try .init(allocator, tmp1.dir);
+    defer std_vfs1.deinit();
+    var std_vfs2: harha.Std = try .init(allocator, tmp2.dir);
+    defer std_vfs2.deinit();
+
+    // Create Overlay VFS
+    var overlay: harha.Overlay = .init(allocator);
+    defer overlay.deinit();
+    try overlay.mount(std_vfs2.vfs(.all), "/cache");
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // Mount both Std and Overlay into Map
+    map.mount(.data, std_vfs1.vfs(.all));
+    map.mount(.cache, overlay.vfs(.all));
+
+    const vfs = map.vfs(.all);
+
+    // Access Std VFS through Map
+    const file_data = try vfs.openFile(map.rootDir(.data), try harha.SafePath.resolve("data.txt"), .{});
+    defer vfs.closeFile(file_data);
+    var buffer: [256]u8 = undefined;
+    const read1 = try vfs.readv(file_data, &.{&buffer});
+    try testing.expectEqualStrings("data", buffer[0..read1]);
+
+    // Access Overlay VFS through Map
+    const file_cache = try vfs.openFile(map.rootDir(.cache), try harha.SafePath.resolve("cache/cache.txt"), .{});
+    defer vfs.closeFile(file_cache);
+    const read2 = try vfs.readv(file_cache, &.{&buffer});
+    try testing.expectEqualStrings("cache", buffer[0..read2]);
+}
+
+// ============================================================================
+// Compile-time Tests
+// ============================================================================
+
+test "Map: rootDir returns 0..N range" {
+    const MapVfs = harha.Map(SmallMount);
+
+    var map: MapVfs = .init;
+    defer map.deinit();
+
+    // rootDir should return handles in 0..N range where N is enum length
+    const data_root = map.rootDir(.data);
+    const cache_root = map.rootDir(.cache);
+    const temp_root = map.rootDir(.temp);
+
+    // Extract integer values
+    const data_int = @intFromEnum(data_root);
+    const cache_int = @intFromEnum(cache_root);
+    const temp_int = @intFromEnum(temp_root);
+
+    // Should be exactly the enum indices (0, 1, 2)
+    try testing.expectEqual(@as(u32, 0), data_int);
+    try testing.expectEqual(@as(u32, 1), cache_int);
+    try testing.expectEqual(@as(u32, 2), temp_int);
+
+    // All should be in range 0..3
+    try testing.expect(data_int < 3);
+    try testing.expect(cache_int < 3);
+    try testing.expect(temp_int < 3);
+}
+
+test "Map: compile-time enum validation" {
+    // Should compile with valid 0..N enum
+    const ValidEnum = enum(u8) { a, b, c };
+    const ValidMap = harha.Map(ValidEnum);
+    _ = ValidMap;
+}
+
+// This would fail at compile time (commented out):
+// test "Map: invalid enum fails compile" {
+//     const InvalidEnum = enum(u8) { a = 0, b = 2, c = 3 }; // Not 0..N
+//     const InvalidMap = harha.Map(InvalidEnum); // Compile error!
+//     _ = InvalidMap;
+// }
+
+test "Map: bit calculation for different enum sizes" {
+    // Small enum: 3 values = needs 2 bits for index, 30 bits for inner handle
+    const Small = enum(u8) { a, b, c };
+    const SmallMap = harha.Map(Small);
+    _ = SmallMap;
+
+    // Medium enum: 8 values = needs 3 bits for index, 29 bits for inner handle
+    const Medium = enum(u8) { v0, v1, v2, v3, v4, v5, v6, v7 };
+    const MediumMap = harha.Map(Medium);
+    _ = MediumMap;
+
+    // Large enum: 16 values = needs 4 bits for index, 28 bits for inner handle
+    const Large = enum(u8) { v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15 };
+    const LargeMap = harha.Map(Large);
+    _ = LargeMap;
+}

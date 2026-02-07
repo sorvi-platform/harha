@@ -5,6 +5,7 @@
 const std = @import("std");
 const enabled = @import("build_options");
 pub const Overlay = @import("vfs/Overlay.zig");
+pub const Map = @import("vfs/map.zig").Map;
 pub const Std = @import("vfs/Std.zig");
 pub const Sra = if (enabled.sra) @import("vfs/Sra.zig") else @compileError("sra archive support was not enabled");
 
