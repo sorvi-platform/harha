@@ -23,8 +23,8 @@ const FileData = struct {
 
 const Id = packed struct (u32) {
     kind: enum (u1) { dir, file },
-    path_idx: u20,
     generation: u11,
+    path_idx: u20,
 
     pub fn init(kind: harha.Kind, path_idx: u20, generation: u11) @This() {
         return .{
