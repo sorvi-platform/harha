@@ -23,12 +23,14 @@ pub fn Map(E: type) type {
 
     const vfs_enum_len = std.enums.values(E).len;
     const BackingInt = std.math.IntFittingRange(0, vfs_enum_len);
+    const Inner = std.meta.Int(.unsigned, 32 - @typeInfo(BackingInt).int.bits);
 
     const Id = packed struct (u32) {
         mnt_idx: BackingInt,
-        inner: std.meta.Int(.unsigned, 32 - @typeInfo(BackingInt).int.bits),
+        inner: Inner,
 
         pub fn initInnerDir(mnt_idx: BackingInt, inner: harha.Dir) @This() {
+            if (std.math.cast(Inner, @intFromEnum(inner)) == null) @panic("harha/Map: truncated bits");
             return .{
                 .mnt_idx = mnt_idx,
                 .inner = @intCast(@intFromEnum(inner)),
@@ -36,6 +38,7 @@ pub fn Map(E: type) type {
         }
 
         pub fn initInnerFile(mnt_idx: BackingInt, inner: harha.File) @This() {
+            if (std.math.cast(Inner, @intFromEnum(inner)) == null) @panic("harha/Map: truncated bits");
             return .{
                 .mnt_idx = mnt_idx,
                 .inner = @intCast(@intFromEnum(inner)),
