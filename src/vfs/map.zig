@@ -43,7 +43,7 @@ pub fn Map(E: type) type {
         }
 
         pub fn fromHarhaDir(dir: harha.Dir) @This() {
-            return @bitCast(@as(u32, @intFromEnum(dir)));
+            return @bitCast(@intFromEnum(dir));
         }
 
         pub fn toHarhaDir(self: @This()) harha.Dir {
@@ -51,7 +51,7 @@ pub fn Map(E: type) type {
         }
 
         pub fn fromHarhaFile(dir: harha.File) @This() {
-            return @bitCast(@as(u32, @intFromEnum(dir)));
+            return @bitCast(@intFromEnum(dir));
         }
 
         pub fn toHarhaFile(self: @This()) harha.File {
