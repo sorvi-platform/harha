@@ -26,7 +26,7 @@ const DirData = struct {
     fn toHarha(self: *const @This()) harha.Dir {
         const int: u32 = (switch (@typeInfo(@TypeOf(self.os.fd))) {
             .int => @intCast(self.os.fd),
-            else => @intFromPtr(self.os.fd),
+            else => @intCast(@intFromPtr(self.os.fd)),
         });
         std.debug.assert(int != 0);
         return @enumFromInt(int);
@@ -51,12 +51,11 @@ const FileData = struct {
     }
 
     fn toHarha(self: *const @This()) harha.File {
-        return @enumFromInt(
-            (switch (@typeInfo(@TypeOf(self.os.handle))) {
-                .int => self.os.handle,
-                else => @intFromPtr(self.os.handle),
-            })
-        );
+        const int: u32 = (switch (@typeInfo(@TypeOf(self.os.handle))) {
+            .int => @intCast(self.os.handle),
+            else => @intCast(@intFromPtr(self.os.handle)),
+        });
+        return @enumFromInt(int);
     }
 };
 
