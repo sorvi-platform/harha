@@ -315,7 +315,7 @@ pub const ReadError = error {
 /// * '/' is the path separator.
 /// * '.' and '..' path components are not allowed.
 /// * '/' character, control characters and whitespace other than the space are not allowed in path components.
-/// * This means paths may not contain newlines, tabs, and such.A
+/// * This means paths may not contain newlines, tabs, and such.
 /// * In addition to be nice to Windows, following characters are not allowed: [<>:"/\|?*]
 pub const SafePath = struct {
     resolved: []const u8,
