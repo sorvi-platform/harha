@@ -123,22 +123,22 @@ pub const Vfs = struct {
     }
 
     pub fn writev(self: @This(), file: File, iov: []const []const u8) !usize {
-        std.debug.assert(self.permissions.write);
+        if (!self.permissions.write) return error.PermissionDenied;
         return self.vtable.writev(self.ptr, file, iov);
     }
 
     pub fn pwritev(self: @This(), file: File, iov: []const []const u8, offset: u64) !usize {
-        std.debug.assert(self.permissions.write);
+        if (!self.permissions.write) return error.PermissionDenied;
         return self.vtable.pwritev(self.ptr, file, iov, offset);
     }
 
     pub fn readv(self: @This(), file: File, iov: []const []u8) !usize {
-        std.debug.assert(self.permissions.read);
+        if (!self.permissions.read) return error.PermissionDenied;
         return self.vtable.readv(self.ptr, file, iov);
     }
 
     pub fn preadv(self: @This(), file: File, iov: []const []u8, offset: u64) !usize {
-        std.debug.assert(self.permissions.read);
+        if (!self.permissions.read) return error.PermissionDenied;
         return self.vtable.preadv(self.ptr, file, iov, offset);
     }
 };
