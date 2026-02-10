@@ -345,8 +345,8 @@ pub const SafePath = struct {
         }
     }
 
-    // Resolve the unsafe path comptime.
-    // This supports translating the unsafe path to absolute path as no runtime allocation is required.
+    /// Resolve the unsafe path comptime.
+    /// This supports translating the unsafe path to absolute path as no runtime allocation is required.
     pub fn resolveComptime(comptime unsafe_path: []const u8) Error!@This() {
         // no comptime allocators still so can't reuse resolve
         // <https://github.com/ziglang/zig/issues/14931>
