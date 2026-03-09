@@ -5,8 +5,8 @@
     .dependencies = .{
         .sra_archive = .{
             .lazy = true,
-            .url = "git+https://github.com/sorvi-platform/sra-archive.git#13818062c2e3bcb87c8b391911b27bb3eba0d5d3",
-            .hash = "sra_archive-0.1.0-edyyWmaSAAAKqZG7SFCDFTEugKtNdYmgNw90gTbx9Fl5",
+            .url = "git+https://github.com/sorvi-platform/sra-archive.git#1306a462516ce0166738278eee3582654994a94e",
+            .hash = "sra_archive-0.1.0-edyyWo6SAAAEd2Ly4C2G9oCrxfks_fIRqf9HiJfigC2x",
         },
     },
     .paths = .{
