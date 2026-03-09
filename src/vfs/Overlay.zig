@@ -129,7 +129,7 @@ fn vfsForPath(self: *@This(), path: []const u8) ?struct { harha.Vfs, harha.SafeP
 fn openDir(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha.Dir.OpenOptions) harha.OpenDirError!harha.Dir {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.resolvedDir(dir) orelse return error.NotDir;
-    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{native_dir.path, sub_path});
+    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ native_dir.path, sub_path });
     errdefer self.allocator.free(path);
     const fs, const child = self.vfsForPath(path) orelse return error.FileNotFound;
     try self.dir.ensureUnusedCapacity(self.allocator, 1);
@@ -149,7 +149,7 @@ fn closeDir(ptr: *anyopaque, dir: harha.Dir) void {
 fn deleteDir(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha.Dir.DeleteOptions) harha.DeleteDirError!void {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.resolvedDir(dir) orelse return error.NotDir;
-    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{native_dir.path, sub_path});
+    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ native_dir.path, sub_path });
     defer self.allocator.free(path);
     const fs, const child = self.vfsForPath(path) orelse return error.FileNotFound;
     return fs.deleteDir(native_dir.inner, child, options);
@@ -159,7 +159,7 @@ fn stat(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.StatError!h
     const self: *@This() = @ptrCast(@alignCast(ptr));
     // TODO: Allow stating mount points under .root
     const native_dir = self.resolvedDir(dir) orelse return error.NotDir;
-    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{native_dir.path, sub_path});
+    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ native_dir.path, sub_path });
     defer self.allocator.free(path);
     const fs, const child = self.vfsForPath(path) orelse return error.FileNotFound;
     return fs.stat(native_dir.inner, child);
@@ -200,7 +200,7 @@ fn iterateDeinit(ptr: *anyopaque, dir: harha.Dir, state: *anyopaque) void {
 fn openFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha.File.OpenOptions) harha.OpenFileError!harha.File {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.resolvedDir(dir) orelse return error.NotDir;
-    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{native_dir.path, sub_path});
+    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ native_dir.path, sub_path });
     defer self.allocator.free(path);
     const fs, const child = self.vfsForPath(path) orelse return error.FileNotFound;
     try self.file.ensureUnusedCapacity(self.allocator, 1);
@@ -220,7 +220,7 @@ fn closeFile(ptr: *anyopaque, file: harha.File) void {
 fn deleteFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.DeleteFileError!void {
     const self: *@This() = @ptrCast(@alignCast(ptr));
     const native_dir = self.resolvedDir(dir) orelse return error.NotDir;
-    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{native_dir.path, sub_path});
+    const path: []const u8 = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ native_dir.path, sub_path });
     defer self.allocator.free(path);
     const fs, const child = self.vfsForPath(path) orelse return error.FileNotFound;
     return fs.deleteFile(native_dir.inner, child);

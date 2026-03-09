@@ -1,7 +1,6 @@
 ///! Harha is a portable virtual filesystem API
 ///! It allows implementing and using different kind of filesystems using a single API
 ///! Harha does not support many OS level concepts like symlinks etc...
-
 const std = @import("std");
 const enabled = @import("build_options");
 pub const Overlay = @import("vfs/Overlay.zig");
@@ -42,7 +41,7 @@ pub const Vfs = struct {
         const rdir: Dir = if (sub_path.isAbsolute()) .root else dir;
         if (self.root != .root) self.closeDir(self.root);
         if (sub_path.relative().len > 0) {
-            self.root = try self.vtable.openDir(self.ptr, rdir, sub_path.relative(), .{.iterate = true});
+            self.root = try self.vtable.openDir(self.ptr, rdir, sub_path.relative(), .{ .iterate = true });
         } else {
             self.root = .root;
         }
@@ -155,7 +154,7 @@ pub const Stat = struct {
     size: u64,
 };
 
-pub const Dir = enum (u32) {
+pub const Dir = enum(u32) {
     root,
     _,
 
@@ -177,7 +176,7 @@ pub const Dir = enum (u32) {
     };
 };
 
-pub const File = enum (u32) {
+pub const File = enum(u32) {
     _,
 
     pub const Mode = enum {
@@ -220,7 +219,7 @@ pub const Permissions = packed struct {
     pub const write_only: @This() = .{ .create = true, .delete = true, .read = false, .write = true, .iterate = false, .stat = false };
 };
 
-pub const OpenDirError = error {
+pub const OpenDirError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -231,7 +230,7 @@ pub const OpenDirError = error {
     ResourceLimitReached,
 };
 
-pub const DeleteDirError = error {
+pub const DeleteDirError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -241,7 +240,7 @@ pub const DeleteDirError = error {
     DirNotEmpty,
 };
 
-pub const StatError = error {
+pub const StatError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -250,7 +249,7 @@ pub const StatError = error {
     NotDir,
 };
 
-pub const IterateError = error {
+pub const IterateError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -258,7 +257,7 @@ pub const IterateError = error {
     NotOpenForIteration,
 };
 
-pub const OpenFileError = error {
+pub const OpenFileError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -270,7 +269,7 @@ pub const OpenFileError = error {
     ResourceLimitReached,
 };
 
-pub const DeleteFileError = error {
+pub const DeleteFileError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -280,14 +279,14 @@ pub const DeleteFileError = error {
     IsDir,
 };
 
-pub const SeekError = error {
+pub const SeekError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
     Unseekable,
 };
 
-pub const WriteError = error {
+pub const WriteError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -295,7 +294,7 @@ pub const WriteError = error {
     NoSpaceLeft,
 };
 
-pub const ReadError = error {
+pub const ReadError = error{
     Unexpected,
     Unsupported,
     PermissionDenied,
@@ -325,7 +324,7 @@ pub const SafePath = struct {
         @"..",
     };
 
-    const Error = error {
+    const Error = error{
         InvalidPath,
     };
 
@@ -360,7 +359,7 @@ pub const SafePath = struct {
                     switch (t) {
                         .@"." => {},
                         .@".." => if (components.len > 0) {
-                            components = components[0..components.len - 1];
+                            components = components[0 .. components.len - 1];
                         },
                     }
                 } else {
@@ -466,8 +465,8 @@ pub const SelectiveWalker = struct {
                     .vfs = top.iter.vfs,
                     .dir = top.iter.dir,
                     .stat = entry.stat,
-                    .basename = self.name_buffer.items[dirname_len .. self.name_buffer.items.len],
-                    .path = self.name_buffer.items[0 .. self.name_buffer.items.len],
+                    .basename = self.name_buffer.items[dirname_len..self.name_buffer.items.len],
+                    .path = self.name_buffer.items[0..self.name_buffer.items.len],
                 };
                 return walker_entry;
             } else {

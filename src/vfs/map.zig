@@ -25,7 +25,7 @@ pub fn Map(E: type) type {
     const BackingInt = std.math.IntFittingRange(0, vfs_enum_len);
     const Inner = std.meta.Int(.unsigned, 32 - @typeInfo(BackingInt).int.bits);
 
-    const Id = packed struct (u32) {
+    const Id = packed struct(u32) {
         mnt_idx: BackingInt,
         inner: Inner,
 

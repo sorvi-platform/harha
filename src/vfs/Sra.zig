@@ -1,6 +1,5 @@
 ///! Harha virtual filesystem for SRA archives
 ///! <https://github.com/sorvi-platform/sra-archive>
-
 const std = @import("std");
 const harha = @import("../harha.zig");
 const sra = @import("sra");
@@ -21,8 +20,8 @@ const FileData = struct {
     rw_offset: u64,
 };
 
-const Id = packed struct (u32) {
-    kind: enum (u1) { dir, file },
+const Id = packed struct(u32) {
+    kind: enum(u1) { dir, file },
     generation: u11,
     path_idx: u20,
 
@@ -79,12 +78,12 @@ pub fn init(allocator: std.mem.Allocator, file: std.fs.File) !@This() {
     errdefer map.deinit(allocator);
 
     // Root directory
-    try map.putNoClobber(allocator, "", .{.archive_offset = 0, .stat = .{
+    try map.putNoClobber(allocator, "", .{ .archive_offset = 0, .stat = .{
         .size = 0,
         .kind = .dir,
         .mtime = 0,
         .ctime = 0,
-    }});
+    } });
 
     // Build file entries
     {
@@ -188,7 +187,7 @@ fn lookupPathIndex(self: *@This(), parent_path: []const u8, sub_path: []const u8
         const idx = self.path.getIndex(sub_path) orelse return null;
         return @intCast(idx);
     }
-    const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{parent_path, sub_path});
+    const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ parent_path, sub_path });
     defer self.allocator.free(path);
     const idx = self.path.getIndex(path) orelse return null;
     return @intCast(idx);
@@ -197,7 +196,7 @@ fn lookupPathIndex(self: *@This(), parent_path: []const u8, sub_path: []const u8
 fn lookupPathEntry(self: *@This(), parent_path: []const u8, sub_path: []const u8) !?*Entry {
     if (parent_path.len == 0) return self.path.getPtr(sub_path);
     if (sub_path.len == 0) return self.path.getPtr(parent_path);
-    const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{parent_path, sub_path});
+    const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ parent_path, sub_path });
     defer self.allocator.free(path);
     return self.path.getPtr(path);
 }
@@ -237,7 +236,7 @@ fn iterate(ptr: *anyopaque, dir: harha.Dir) harha.IterateError!*anyopaque {
     for (self.path.keys(), self.path.values()) |path, *entry| {
         if (path.len <= parent_path.len) continue;
         if (parent_path.len > 0 and !std.mem.startsWith(u8, path, parent_path)) continue;
-        const child_path = if (parent_path.len > 0) path[parent_path.len + 1..] else path;
+        const child_path = if (parent_path.len > 0) path[parent_path.len + 1 ..] else path;
         if (std.mem.indexOfScalar(u8, child_path, '/')) |_| continue;
         try entries.append(self.allocator, .{
             .basename = std.fs.path.basenamePosix(path),
@@ -336,19 +335,7 @@ fn innerReadv(file: std.fs.File, iov: []const []u8, initial_offset: u64, limit: 
         }
         const consumed_batch = file.preadv(piov[0..piov_len], offset) catch |err| return switch (err) {
             error.AccessDenied => error.PermissionDenied,
-            error.Unseekable,
-            error.InputOutput,
-            error.SystemResources,
-            error.IsDir,
-            error.OperationAborted,
-            error.BrokenPipe,
-            error.ConnectionResetByPeer,
-            error.ConnectionTimedOut,
-            error.SocketNotConnected,
-            error.WouldBlock,
-            error.Canceled,
-            error.ProcessNotFound,
-            error.LockViolation => error.Unexpected,
+            error.Unseekable, error.InputOutput, error.SystemResources, error.IsDir, error.OperationAborted, error.BrokenPipe, error.ConnectionResetByPeer, error.ConnectionTimedOut, error.SocketNotConnected, error.WouldBlock, error.Canceled, error.ProcessNotFound, error.LockViolation => error.Unexpected,
             else => |e| return e,
         };
         consumed += consumed_batch;

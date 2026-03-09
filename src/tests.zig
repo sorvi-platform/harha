@@ -908,7 +908,7 @@ test "SRA: walker integration" {
 
     // Should find all files and directories in the archive
     try testing.expect(total_files >= 3); // file1.txt, file2.txt, file3.txt
-    try testing.expect(total_dirs >= 2);  // dir1, dir2
+    try testing.expect(total_dirs >= 2); // dir1, dir2
 }
 
 // ============================================================================
@@ -1780,8 +1780,22 @@ const MediumMount = enum(u8) {
 
 // Test enum at limit (more entries = fewer bits for inner handles)
 const LargeMount = enum(u8) {
-    m0, m1, m2, m3, m4, m5, m6, m7,
-    m8, m9, m10, m11, m12, m13, m14, m15,
+    m0,
+    m1,
+    m2,
+    m3,
+    m4,
+    m5,
+    m6,
+    m7,
+    m8,
+    m9,
+    m10,
+    m11,
+    m12,
+    m13,
+    m14,
+    m15,
 };
 
 test "Map: type generation and initialization" {

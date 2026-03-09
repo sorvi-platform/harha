@@ -70,7 +70,7 @@ pub fn init(allocator: std.mem.Allocator, root_dir: std.fs.Dir) !@This() {
 }
 
 pub fn initPath(allocator: std.mem.Allocator, dir: std.fs.Dir, sub_path: []const u8) !@This() {
-    const root = try dir.openDir(sub_path, .{.iterate = true});
+    const root = try dir.openDir(sub_path, .{ .iterate = true });
     errdefer root.close();
     return .{
         .allocator = allocator,
@@ -131,18 +131,11 @@ fn openDir(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha
     try self.dir.ensureUnusedCapacity(self.allocator, 1);
     const actual_sub_path = if (sub_path.len > 0) sub_path else ".";
     const res_dir: std.fs.Dir = switch (options.create) {
-        true => os_dir.makeOpenPath(actual_sub_path, .{.no_follow = true, .iterate = options.iterate}),
-        false => os_dir.openDir(actual_sub_path, .{.no_follow = true, .iterate = options.iterate}),
+        true => os_dir.makeOpenPath(actual_sub_path, .{ .no_follow = true, .iterate = options.iterate }),
+        false => os_dir.openDir(actual_sub_path, .{ .no_follow = true, .iterate = options.iterate }),
     } catch |err| return switch (err) {
-        error.AccessDenied,
-        error.ReadOnlyFileSystem => error.PermissionDenied,
-        error.SystemResources,
-        error.ProcessFdQuotaExceeded,
-        error.SystemFdQuotaExceeded,
-        error.FileTooBig,
-        error.NoSpaceLeft,
-        error.DiskQuota,
-        error.LinkQuotaExceeded => error.ResourceLimitReached,
+        error.AccessDenied, error.ReadOnlyFileSystem => error.PermissionDenied,
+        error.SystemResources, error.ProcessFdQuotaExceeded, error.SystemFdQuotaExceeded, error.FileTooBig, error.NoSpaceLeft, error.DiskQuota, error.LinkQuotaExceeded => error.ResourceLimitReached,
         error.IsDir,
         error.WouldBlock,
         error.ProcessNotFound,
@@ -158,7 +151,8 @@ fn openDir(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harha
         error.SymLinkLoop,
         error.DeviceBusy,
         error.FileLocksNotSupported,
-        error.FileBusy => error.Unexpected,
+        error.FileBusy,
+        => error.Unexpected,
         else => |e| e,
     };
     errdefer comptime unreachable;
@@ -174,7 +168,7 @@ fn closeDir(ptr: *anyopaque, dir: harha.Dir) void {
         else => {
             var kv = self.dir.fetchSwapRemove(dir) orelse return;
             kv.value.close();
-        }
+        },
     }
 }
 
@@ -186,8 +180,7 @@ fn deleteDir(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: har
         true => os_dir.deleteTree(actual_sub_path),
         false => os_dir.deleteDir(actual_sub_path),
     } catch |err| return switch (err) {
-        error.AccessDenied,
-        error.ReadOnlyFileSystem => error.PermissionDenied,
+        error.AccessDenied, error.ReadOnlyFileSystem => error.PermissionDenied,
         error.SystemResources,
         error.ProcessNotFound,
         error.NoDevice,
@@ -202,7 +195,8 @@ fn deleteDir(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: har
         error.FileTooBig,
         error.FileBusy,
         error.DeviceBusy,
-        error.FileSystem => error.Unexpected,
+        error.FileSystem,
+        => error.Unexpected,
         else => |e| e,
     };
 }
@@ -226,7 +220,7 @@ fn stat(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.StatError!h
     const actual_sub_path = if (sub_path.len > 0) sub_path else ".";
     const st = os_dir.statFile(actual_sub_path) catch |err| return switch (err) {
         error.IsDir => {
-            var st_dir = os_dir.openDir(actual_sub_path, .{.no_follow = true}) catch return error.Unexpected;
+            var st_dir = os_dir.openDir(actual_sub_path, .{ .no_follow = true }) catch return error.Unexpected;
             defer st_dir.close();
             const st = st_dir.stat() catch return error.Unexpected;
             return toHarhaStat(st);
@@ -252,7 +246,8 @@ fn stat(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.StatError!h
         error.DeviceBusy,
         error.FileLocksNotSupported,
         error.FileBusy,
-        error.PathAlreadyExists => error.Unexpected,
+        error.PathAlreadyExists,
+        => error.Unexpected,
         else => |e| e,
     };
     return toHarhaStat(st);
@@ -271,8 +266,7 @@ fn iterateNext(_: *anyopaque, _: harha.Dir, state: *anyopaque) harha.IterateErro
     while (true) {
         const entry = (iter.next() catch |err| return switch (err) {
             error.AccessDenied => error.PermissionDenied,
-            error.SystemResources,
-            error.InvalidUtf8 => error.Unexpected,
+            error.SystemResources, error.InvalidUtf8 => error.Unexpected,
             else => |e| e,
         }) orelse break;
         harha.SafePath.validate(entry.name) catch continue;
@@ -301,7 +295,8 @@ fn iterateNext(_: *anyopaque, _: harha.Dir, state: *anyopaque) harha.IterateErro
             error.DeviceBusy,
             error.FileLocksNotSupported,
             error.FileBusy,
-            error.PathAlreadyExists => error.Unexpected,
+            error.PathAlreadyExists,
+            => error.Unexpected,
             else => |e| e,
         };
         switch (st.kind) {
@@ -342,11 +337,7 @@ fn openFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harh
         }),
     } catch |err| return switch (err) {
         error.AccessDenied => error.PermissionDenied,
-        error.SystemResources,
-        error.ProcessFdQuotaExceeded,
-        error.SystemFdQuotaExceeded,
-        error.FileTooBig,
-        error.NoSpaceLeft => error.ResourceLimitReached,
+        error.SystemResources, error.ProcessFdQuotaExceeded, error.SystemFdQuotaExceeded, error.FileTooBig, error.NoSpaceLeft => error.ResourceLimitReached,
         error.WouldBlock,
         error.ProcessNotFound,
         error.SharingViolation,
@@ -361,7 +352,8 @@ fn openFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8, options: harh
         error.SymLinkLoop,
         error.DeviceBusy,
         error.FileLocksNotSupported,
-        error.FileBusy => error.Unexpected,
+        error.FileBusy,
+        => error.Unexpected,
         else => |e| e,
     };
     errdefer res_file.close();
@@ -387,8 +379,7 @@ fn deleteFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.Delet
     const os_dir = toOsDir(self, dir) orelse return error.NotDir;
     const actual_sub_path = if (sub_path.len > 0) sub_path else ".";
     os_dir.deleteFile(actual_sub_path) catch |err| return switch (err) {
-        error.AccessDenied,
-        error.ReadOnlyFileSystem => error.PermissionDenied,
+        error.AccessDenied, error.ReadOnlyFileSystem => error.PermissionDenied,
         error.SystemResources,
         error.NameTooLong,
         error.InvalidUtf8,
@@ -397,7 +388,8 @@ fn deleteFile(ptr: *anyopaque, dir: harha.Dir, sub_path: []const u8) harha.Delet
         error.NetworkNotFound,
         error.SymLinkLoop,
         error.FileBusy,
-        error.FileSystem => error.Unexpected,
+        error.FileSystem,
+        => error.Unexpected,
         else => |e| e,
     };
 }
@@ -433,9 +425,7 @@ fn innerWritev(file: std.fs.File, iov: []const []const u8, initial_offset: u64) 
             iovs_left -= 1;
         }
         const written_batch = file.pwritev(piov[0..piov_len], offset) catch |err| return switch (err) {
-            error.FileTooBig,
-            error.MessageTooBig,
-            error.DiskQuota => error.NoSpaceLeft,
+            error.FileTooBig, error.MessageTooBig, error.DiskQuota => error.NoSpaceLeft,
             error.AccessDenied => error.PermissionDenied,
             error.NoDevice,
             error.DeviceBusy,
@@ -448,7 +438,8 @@ fn innerWritev(file: std.fs.File, iov: []const []const u8, initial_offset: u64) 
             error.ConnectionResetByPeer,
             error.WouldBlock,
             error.ProcessNotFound,
-            error.LockViolation => error.Unexpected,
+            error.LockViolation,
+            => error.Unexpected,
             else => |e| return e,
         };
         written += written_batch;
@@ -502,7 +493,8 @@ fn innerReadv(file: std.fs.File, iov: []const []u8, initial_offset: u64) !usize 
             error.WouldBlock,
             error.Canceled,
             error.ProcessNotFound,
-            error.LockViolation => error.Unexpected,
+            error.LockViolation,
+            => error.Unexpected,
             else => |e| return e,
         };
         consumed += consumed_batch;
