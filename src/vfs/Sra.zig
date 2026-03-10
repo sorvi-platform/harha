@@ -335,7 +335,20 @@ fn innerReadv(file: std.fs.File, iov: []const []u8, initial_offset: u64, limit: 
         }
         const consumed_batch = file.preadv(piov[0..piov_len], offset) catch |err| return switch (err) {
             error.AccessDenied => error.PermissionDenied,
-            error.Unseekable, error.InputOutput, error.SystemResources, error.IsDir, error.OperationAborted, error.BrokenPipe, error.ConnectionResetByPeer, error.ConnectionTimedOut, error.SocketNotConnected, error.WouldBlock, error.Canceled, error.ProcessNotFound, error.LockViolation => error.Unexpected,
+            error.Unseekable,
+            error.InputOutput,
+            error.SystemResources,
+            error.IsDir,
+            error.OperationAborted,
+            error.BrokenPipe,
+            error.ConnectionResetByPeer,
+            error.ConnectionTimedOut,
+            error.SocketNotConnected,
+            error.WouldBlock,
+            error.Canceled,
+            error.ProcessNotFound,
+            error.LockViolation,
+            => error.Unexpected,
             else => |e| return e,
         };
         consumed += consumed_batch;
