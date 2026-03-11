@@ -61,17 +61,13 @@ const Id = packed struct(u32) {
     }
 };
 
-fn strForOffset(offset: usize, strings: []const u8) []const u8 {
-    return std.mem.sliceTo(strings[offset..], 0);
-}
-
-pub fn init(allocator: std.mem.Allocator, file: std.fs.File) !@This() {
+pub fn init(allocator: std.mem.Allocator, file: std.fs.File, magic: sra.Magic) !@This() {
     var buffer: [4096]u8 = undefined;
     var file_reader = file.reader(&buffer);
-    var reader: sra.Reader = try .init(&file_reader);
-    try reader.validate();
+    var reader: sra.Reader = try .init(&file_reader, magic);
+    try reader.validateCrc();
 
-    const strings = try reader.readStringTableAlloc(allocator);
+    const strings = try reader.allocPathBytes(allocator);
     errdefer allocator.free(strings);
 
     var map: std.StringArrayHashMapUnmanaged(Entry) = .empty;
@@ -85,14 +81,16 @@ pub fn init(allocator: std.mem.Allocator, file: std.fs.File) !@This() {
         .ctime = 0,
     } });
 
-    // Build file entries
+    var set: std.StringArrayHashMapUnmanaged(void) = .empty;
+    defer set.deinit(allocator);
+
     {
         var iter = try reader.iterator();
-        try map.ensureUnusedCapacity(allocator, iter.num_entries);
+        try map.ensureUnusedCapacity(allocator, iter.entries_length);
         while (try iter.next(&reader)) |entry| {
-            try reader.validateEntry(entry);
-            const path_offset: u32 = @intCast(entry.path_offset - reader.path_table_offset);
-            const path = strForOffset(path_offset, strings);
+            try entry.validate(&reader);
+            try entry.path.validate(strings);
+            const path = entry.path.slice(strings);
             map.putAssumeCapacityNoClobber(path, .{
                 .stat = .{
                     .kind = .file,
@@ -102,16 +100,8 @@ pub fn init(allocator: std.mem.Allocator, file: std.fs.File) !@This() {
                 },
                 .archive_offset = entry.data_offset,
             });
-        }
-    }
 
-    // Build dir entries (reuses the file path strings)
-    var set: std.StringArrayHashMapUnmanaged(void) = .empty;
-    defer set.deinit(allocator);
-    {
-        var iter = std.mem.tokenizeScalar(u8, strings, 0);
-        while (iter.next()) |path| {
-            try sra.validatePath(path);
+            // create directories
             var iter2 = std.mem.tokenizeScalar(u8, std.fs.path.dirnamePosix(path) orelse "", '/');
             var path_offset: u32 = 0;
             while (iter2.next()) |part| {
@@ -143,10 +133,10 @@ pub fn init(allocator: std.mem.Allocator, file: std.fs.File) !@This() {
     };
 }
 
-pub fn initPath(allocator: std.mem.Allocator, dir: std.fs.Dir, sub_path: []const u8) !@This() {
+pub fn initPath(allocator: std.mem.Allocator, dir: std.fs.Dir, sub_path: []const u8, magic: sra.Magic) !@This() {
     var archive = try dir.openFile(sub_path, .{});
     errdefer archive.close();
-    return try init(allocator, archive);
+    return try init(allocator, archive, magic);
 }
 
 pub fn deinit(self: *@This()) void {

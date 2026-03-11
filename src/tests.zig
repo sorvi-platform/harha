@@ -596,11 +596,12 @@ fn createTestArchive(dir: std.fs.Dir, filename: []const u8) !void {
     defer file.close();
     var buffer: [4096]u8 = undefined;
     var file_writer = file.writer(&buffer);
-    var writer: sra.Writer = try .init(testing.allocator, &file_writer);
+    var writer: sra.Writer = .init(testing.allocator, &file_writer.interface);
     defer writer.deinit();
-    try writer.stream.writeFileBytes("file1.txt", "Hello from SRA", 0);
-    try writer.stream.writeFileBytes("dir1/file2.txt", "Nested file", 0);
-    try writer.stream.writeFileBytes("dir1/dir2/file3.txt", "Deeply nested", 0);
+    try writer.writeMagic(.default);
+    try writer.writeFileBytes("file1.txt", "Hello from SRA", 0);
+    try writer.writeFileBytes("dir1/file2.txt", "Nested file", 0);
+    try writer.writeFileBytes("dir1/dir2/file3.txt", "Deeply nested", 0);
     try writer.finish();
 }
 
@@ -613,7 +614,7 @@ test "SRA: basic file reading" {
     // Create test archive
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -635,7 +636,7 @@ test "SRA: read-only enforcement" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -661,7 +662,7 @@ test "SRA: directory iteration" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -693,7 +694,7 @@ test "SRA: nested directory iteration" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -725,7 +726,7 @@ test "SRA: stat operations" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -748,7 +749,7 @@ test "SRA: seek operations" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -773,7 +774,7 @@ test "SRA: multiple file handles" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -806,7 +807,7 @@ test "SRA: preadv doesn't affect cursor" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -834,7 +835,7 @@ test "SRA: generation counter uniqueness" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -863,7 +864,7 @@ test "SRA: handle type validation" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -887,7 +888,7 @@ test "SRA: walker integration" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     const vfs = sra_vfs.vfs(.all);
@@ -923,7 +924,7 @@ test "SRA Overlay: mount SRA archive" {
 
     try createTestArchive(tmp.dir, "test.sra");
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp.dir, "test.sra", .default);
     defer sra_vfs.deinit();
 
     var overlay: harha.Overlay = .init(allocator);
@@ -953,7 +954,7 @@ test "SRA Overlay: mixed SRA and Std mounts" {
     try createTestArchive(tmp1.dir, "test.sra");
     try tmp2.dir.writeFile(.{ .sub_path = "regular.txt", .data = "Regular file" });
 
-    var sra_vfs: harha.Sra = try .initPath(allocator, tmp1.dir, "test.sra");
+    var sra_vfs: harha.Sra = try .initPath(allocator, tmp1.dir, "test.sra", .default);
     defer sra_vfs.deinit();
     var std_vfs: harha.Std = try .init(allocator, tmp2.dir);
     defer std_vfs.deinit();
