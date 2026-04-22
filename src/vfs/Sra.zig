@@ -86,12 +86,13 @@ pub fn init(allocator: std.mem.Allocator, file: std.fs.File, magic: sra.Magic) !
 
     {
         var iter = try reader.iterator();
-        try map.ensureUnusedCapacity(allocator, iter.entries_length);
+        // due to making directories, we need to allocate more than entries_length
+        try map.ensureUnusedCapacity(allocator, iter.entries_length * 2);
         while (try iter.next(&reader)) |entry| {
             try entry.validate(&reader);
             try entry.path.validate(strings);
             const path = entry.path.slice(strings);
-            map.putAssumeCapacityNoClobber(path, .{
+            try map.putNoClobber(allocator, path, .{
                 .stat = .{
                     .kind = .file,
                     .size = entry.data_length,
